@@ -1,28 +1,27 @@
 # 📰 Autonomous News Aggregation, Summarization, and Publishing Agent
 
 ## 🚀 Overview
-This project is an **AI-powered autonomous news agent** that **automatically** fetches, summarizes, and publishes news articles on various topics. It ensures **relevance and reliability** by fetching multiple sources, verifying content, and generating **fact-checked summaries**.
-![image](https://github.com/user-attachments/assets/07142275-33e9-4698-a167-2d59badd3fa1)
+This project is an **AI-powered autonomous news agent** that dynamically crawls, summarizes, and publishes local news for major Indian cities. By transitioning from heavy local deep learning models to cloud-based APIs (Groq), the system starts instantaneously and streams localized summaries and authentic web images in real-time.
+
+---
 
 ### **Core Features**
-✅ **Fetches news** from multiple sources based on a location & topic.  
-✅ **Filters duplicates & redundant articles**.  
-✅ **Summarizes news** using NLP models.  
-✅ **Classifies articles** into relevant categories.  
-✅ **Optimizes content for SEO**.  
-✅ **Publishes news automatically** on a web app.  
-✅ **Generates AI-powered images** to enhance news content.  
+* 🌆 **City-Specific Feeds**: Select and fetch news dynamically for 22 major Indian cities (e.g. Pune, Delhi, Mumbai, Lucknow) plus national trending updates.
+* ⚡ **Instant Boot & Zero Local Compute**: Bypassed PyTorch, BERT, and BART models in favor of Groq APIs, reducing server startup latency from minutes to under 0.1 seconds.
+* 🔄 **On-Demand Background Scraping**: Crawls news dynamically when requested by a frontend user, caching results for 2 hours to optimize SerpAPI credits.
+* 📈 **Progressive Article Rendering**: Writes and streams news articles progressively to the UI as they finish summarization, allowing users to start reading within 4–5 seconds.
+* 🖼️ **Authentic Image Extraction**: Automatically extracts the featured image directly from crawled web page metadata (`og:image`, `twitter:image`) or search thumbnails, displaying real news pictures.
+* 💬 **Real-time Status Updates**: Displays step-by-step crawl progress (e.g., `"Summarizing article 1 of 3..."`) directly on the UI spinner.
 
 ---
 
 ## 🏗 Tech Stack
-- **Frontend:** React.js
-- **Backend:** Flask (Python)
-- **Database:** MongoDB (Recommended) / PostgreSQL
-- **AI Models:** Gemini Flash 1.5
-- **Web Scraping:** SerpAPI, BeautifulSoup
-- **LLM Summarization & Merging:** Gemini API
-- **Similarity Search & Classification:** BERT embeddings
+* **Frontend**: React.js (Vite, Tailwind CSS, Lucide icons)
+* **Backend**: Flask (Python)
+* **Database**: Lightweight JSON cache (`News.json` / `News_list.json`)
+* **LLM Summarization**: Groq API (`llama-3.3-70b-versatile` via OpenAI SDK)
+* **Web Search**: SerpAPI
+* **HTML Parsing**: BeautifulSoup4 & Requests
 
 ---
 
@@ -31,83 +30,69 @@ This project is an **AI-powered autonomous news agent** that **automatically** f
 ### **1️⃣ Clone the Repository**
 ```bash
 git clone https://github.com/Prateek-1110/News_automation.git
-
+cd News_Automation
 ```
 
----
-
-## 🖥 Backend Setup (Flask API)
-### **2️⃣ Creating a Virtual Environment**
-Using **Conda** :
+### **2️⃣ Set Up Virtual Environment (Recommended)**
 ```bash
-conda create --name news_env python=3.8 -y
-conda activate news_env
+# Create a virtual environment
+python -m venv myenv
+
+# Activate it
+# On Windows:
+.\myenv\Scripts\activate
+# On macOS/Linux:
+source myenv/bin/activate
 ```
 
-Using **venv**(Recommended):
-```bash
-python -m venv news_env
-source news_env/bin/activate  # macOS/Linux
-news_env\Scripts\activate     # Windows
-```
-
-### **3️⃣ Installing Dependencies**
+### **3️⃣ Install Backend Dependencies**
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-### **4️⃣ Configuring API Keys**
-Update the **`configs.yaml`** file with:
-```yaml
-location: "Delhi"
-topic: "Technology News"
+### **4️⃣ Configure Environment Keys**
+Create a **`.env`** file inside the `backend/` directory:
+```env
+# Groq API Configuration
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama-3.3-70b-versatile
 
+# Search and Image Upload API Keys
+SERP_API_KEY=your_serp_api_key
+IMGBB_API_KEY=your_imgbb_api_key
+
+# Server Port
+PORT=5000
 ```
-Set up API keys inside `config.py`:
-```python
-gemini_api_key = "your-gemini-api-key"
-serp_api_key = "your-serp-api-key"
-imgBB_api_key = "your-imgBB-api-key"
 
+---
 
+## 🖥 Running the App
+
+### **1️⃣ Test Configuration (Optional)**
+Verify that your API keys are working correctly before starting the server:
+```bash
+# Run from the root directory
+python test_keys.py
 ```
 
-### **5️⃣ Running the Flask Backend**
+### **2️⃣ Run the Flask Backend**
 ```bash
 cd backend
-python3 server.py
+python server.py
 ```
-The backend will start at `http://127.0.0.1:5000/`.
+The backend will immediately start on `http://127.0.5000` (or `http://127.0.0.1:5000`) and initiate a background crawl for the default national trending ("All") news.
 
----
-
-## 🌐 Frontend Setup (React)
-### **6️⃣ Installing Dependencies**
+### **3️⃣ Run the React Frontend**
 ```bash
-cd frontend
+cd ../frontend
 npm install
-
-```
-
-### **7️⃣ Running the React Frontend**
-```bash
 npm run dev
 ```
-The frontend will be available at `http://localhost:5173/`.
+Open `http://localhost:5173` in your browser. Use the **Select Location** dropdown to explore breaking updates!
 
----
-
-
-
-
----
-## 🎯 Future Improvements
-✅ **Advanced NLP**: Improve summarization with better LLMs  
-✅ **User Metrics**: Track views, shares, and engagement  
-✅ **Multilingual Support**: Translate news into multiple languages   
 ---
 
 ## 📜 License
 This project is open-source and available under the **MIT License**.
-
