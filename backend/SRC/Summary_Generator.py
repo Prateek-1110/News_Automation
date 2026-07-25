@@ -1,15 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
-import google.generativeai as genai
 from typing import List, Dict, Optional
 import time
 import re
-import pandas as pd
-from SRC.Helper_func import * 
-from SRC.Prompts import system_prompt, merge_prompt
+from openai import OpenAI
 
 class NewsSearcher:
-    def __init__(self, location: str,topic: str, serp_api_key: str):
+    def __init__(self, location: str, topic: str, serp_api_key: str):
         self.location = location
         self.topic = topic
         self.api_key = serp_api_key
@@ -18,9 +15,9 @@ class NewsSearcher:
     def search_news(self, query: str, num_results: int = 3) -> List[Dict]:
         """
         Search for news articles using SERP API.
-        Returns list of dictionaries with title and url.
+        Returns list of dictionaries with title, url, and thumbnail.
         """
-        search_query = f"{self.location} {self.topic} {query}"
+        search_query = f"{self.location} {self.topic} {query}".strip()
         
         try:
             params = {
@@ -37,10 +34,10 @@ class NewsSearcher:
             if 'news_results' in data:
                 for result in data['news_results'][:num_results]:
                     results.append({
-                        'title': result['title'],
-                        'url': result['link']
+                        'title': result.get('title', ''),
+                        'url': result.get('link', ''),
+                        'thumbnail': result.get('thumbnail', '')
                     })
-            # print(results)
             return results
             
         except Exception as e:
@@ -50,164 +47,101 @@ class NewsSearcher:
 class ArticleScraper:
     def __init__(self):
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
         }
 
     def scrape_article(self, url):
         """
-        Scrapes the given URL and returns the text content and a clean, concise description for Google search.
-        Args:
-            url (str): The webpage URL to scrape.
-        Returns:
-            dict: A dictionary containing the URL, its extracted text content, and a clean short description.
+        Scrapes the given URL and returns the text content, description, and article image.
         """
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-        }
-        
-        response = requests.get(url, headers=headers)
-    
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            text_content = soup.get_text(separator="\n", strip=True)
-            
-            # Extract a concise description for Google search
-            description = None
-            meta_tags = [
-                {'property': 'og:title'}, 
-                {'name': 'twitter:title'},
-                {'name': 'description'}, 
-                {'property': 'og:description'},
-                {'name': 'twitter:description'}
-            ]
-            
-            for tag in meta_tags:
-                meta = soup.find('meta', tag)
-                if meta and meta.get('content'):
-                    description = meta['content']
-                    break
-            
-            # If no meta description is found, get the first 150 characters of the first paragraph
-            if not description:
-                paragraphs = soup.find_all('p')
-                if paragraphs:
-                    description = paragraphs[0].get_text()
-            
-            # Clean and format the description
-            if description:
-                # Remove encoded characters and unnecessary spaces
-                description = description.encode('latin1', 'ignore').decode('utf-8', 'ignore')
-                description = description.strip()
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                text_content = soup.get_text(separator="\n", strip=True)
                 
-                # Remove everything after the first "|"
-                description = re.split(r'\s*\|\s*', description)[0]
+                # Extract description and image
+                description = None
+                image_url = None
                 
-                # Limit the description to 150 characters for better search usability
-                description = (description[:147] + '...') if len(description) > 150 else description
-            
-            return {
-                "url": url,
-                "content": text_content,
-                "description": description if description else ""
-            }
+                meta_tags = [
+                    {'property': 'og:title'}, 
+                    {'name': 'twitter:title'},
+                    {'name': 'description'}, 
+                    {'property': 'og:description'},
+                    {'name': 'twitter:description'}
+                ]
+                
+                for tag in meta_tags:
+                    meta = soup.find('meta', tag)
+                    if meta and meta.get('content'):
+                        description = meta['content']
+                        break
+                
+                # Extract og:image or twitter:image
+                img_meta_tags = [
+                    {'property': 'og:image'},
+                    {'name': 'twitter:image'},
+                    {'property': 'og:image:secure_url'}
+                ]
+                for tag in img_meta_tags:
+                    meta = soup.find('meta', tag)
+                    if meta and meta.get('content'):
+                        image_url = meta['content'].strip()
+                        if image_url.startswith('http'):
+                            break
+                
+                # Fallback to first non-logo, non-ad img on page
+                if not image_url:
+                    for img in soup.find_all('img'):
+                        src = img.get('src', '')
+                        if src.startswith('http') and not any(x in src.lower() for x in ['logo', 'icon', 'ad', 'badge', 'avatar', 'loader', 'banner']):
+                            image_url = src
+                            break
+                
+                if not description:
+                    paragraphs = soup.find_all('p')
+                    if paragraphs:
+                        description = paragraphs[0].get_text()
+                
+                if description:
+                    description = description.encode('latin1', 'ignore').decode('utf-8', 'ignore')
+                    description = description.strip()
+                    description = re.split(r'\s*\|\s*', description)[0]
+                    description = (description[:147] + '...') if len(description) > 150 else description
+                
+                return {
+                    "url": url,
+                    "content": text_content,
+                    "description": description if description else "",
+                    "image": image_url if image_url else ""
+                }
+        except Exception as e:
+            print(f"Error scraping {url}: {e}")
+        return None
 
 class ContentSummarizer:
-    def __init__(self, system_prompt, api_key: str):
-        self.api_key = api_key
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+    def __init__(self, system_prompt, groq_api_key: str, groq_model: str = "llama-3.3-70b-versatile"):
+        self.client = OpenAI(
+            api_key=groq_api_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
+        self.groq_model = groq_model
         self.system_prompt = system_prompt
     
     def summarize_article(self, article: str) -> str:
         """
-        Summarize a single article using Gemini API.
+        Summarize a single article using Groq API.
         """
         prompt = f"{self.system_prompt}\n\nHere is the article to summarize:\n\n{article}"
-        # print('reached here')
         try:
-            response = self.model.generate_content(prompt)
-            return response.text
+            response = self.client.chat.completions.create(
+                model=self.groq_model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content if response.choices[0].message.content else None
         except Exception as e:
-            print(f"Error in summarization: {str(e)}")
+            print(f"Error in summarization with Groq: {str(e)}")
             return None
-
-class NewsAgent1:
-    def __init__(self, system_prompt, topic: str, gemini_api_key: str, serp_api_key: str,location: str = "Delhi"):
-        self.searcher = NewsSearcher(location,topic, serp_api_key)
-        self.scraper = ArticleScraper()
-        self.summarizer = ContentSummarizer(system_prompt,gemini_api_key)
-        
-    def process_news(self, num_links, initial_query: str = "" ) -> pd.DataFrame:
-        """
-        Process news articles and return a DataFrame with individual summaries
-        """
-        # Get news articles
-        results = self.searcher.search_news(initial_query , num_links)
-        # Create lists to store data
-        data = []
-        summary = None
-        for result in results:
-            # Scrape article
-            article_text = self.scraper.scrape_article(result['url'])
-            
-            if article_text:
-                # Store the data
-                data.append({
-                    'title': result['title'],
-                    'url': result['url'],
-                    'full_text': article_text
-                })
-            # Add delay to avoid rate limiting
-            time.sleep(2)
-        
-        # Create DataFrame
-        df = pd.DataFrame(data)
-        return df
-
-class NewsAgent2:
-    def __init__(self, merge_prompt,
-                 system_prompt,
-                 topic: str, 
-                 gemini_api_key: str,
-                 serp_api_key: str,
-                 similarity_threshold=0.75
-                 
-                ):
-        location=""
-        self.searcher = NewsSearcher(location,topic, serp_api_key)
-        self.scraper = ArticleScraper()
-        # self.summarizer = ContentSummarizer(merge_prompt,gemini_api_key)
-        self.authenticator = News_Authenticator(gemini_api_key , merge_prompt)
-        self.newsfilter = NewsFilter(threshold=similarity_threshold)
-        self.summary_generator = ContentSummarizer(system_prompt,api_key=gemini_api_key)
-    def process_news(self, num_links, initial_query: str = "" ):
-        """
-        Process news articles and return a DataFrame with individual summaries
-        """
-        # Get news articles
-        results = self.searcher.search_news(initial_query , num_links) ##num_links links on one description
-                                                                        ##by SerpApi Call
-        # Create lists to store data
-        data = []
-        summary = None
-        for result in results: 
-            # Scrape article
-            article_text = self.scraper.scrape_article(result['url'])
-            if article_text:
-                data.append(article_text)
-            # Add delay to avoid rate limiting
-            time.sleep(2)
-        # print(data)
-        texts = []
-        for i in data:
-            texts.append(i['description']) 
-        similar_texts_indices = self.newsfilter.filter_similar_texts(texts)
-        # print(similar_texts_indices)
-        similar_texts = []
-        for i in similar_texts_indices:
-            similar_texts.append(self.summary_generator.summarize_article(data[i]['content']))
-        summary = self.authenticator.merge_text(similar_texts)
-        
-        # Create DataFrame
-        
-        return summary
